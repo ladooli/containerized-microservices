@@ -1,0 +1,98 @@
+version: '3.3'
+
+services:
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "${HOST_PORT}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth
+      - storage
+      - frontend
+    networks:
+      - app-network
+    dns:
+      - 1.1.1.1
+      - 1.1.1.3
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    expose:
+      - "80"
+    networks:
+      - app-network
+    dns:
+      - 1.1.1.1
+      - 1.1.1.3
+    restart: unless-stopped
+
+  auth:
+    build: ./auth-service
+    expose:
+      - "3000"
+    environment:
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+    dns:
+      - 1.1.1.1
+      - 1.1.1.3
+    restart: unless-stopped
+
+  storage:
+    build: ./storage-service
+    expose:
+      - "3001"
+    environment:
+      PORT: 3001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      AUTH_SERVICE_URL: http://auth:3000
+    depends_on:
+      - postgres
+      - auth
+    networks:
+      - app-network
+    dns:
+      - 1.1.1.1
+      - 1.1.1.3
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - app-network
+    dns:
+      - 1.1.1.1
+      - 1.1.1.3
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
